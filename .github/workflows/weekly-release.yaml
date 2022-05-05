@@ -1,0 +1,60 @@
+name: Release creator
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        type: string
+        description: Branch,tag, or SHA to deploy?
+        default: release
+        required: false
+    # secrets:
+    #   FLEET_RELEASE_SLACK_WEBHOOK:
+    #     required: true
+  # schedule:
+  #   # runs tests every Friday at 2pm UTC
+  #   - cron: '0 14 * * 5'
+
+jobs:
+  release_creator:
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.release_tag.outputs.release_tag }}
+    steps:
+      - name: Get current date
+        id: date
+        run: echo "::set-output name=date::$(date +'%-d.%-m.%Y')"
+
+      - name: Generate release tag environment variable
+        id: release_tag
+        run: echo "::set-output name=release_tag::webapps-fleet@${{ steps.date.outputs.date }}"
+
+      - name: Dump GitHub context
+        id: github_context_step
+        run: echo '${{ steps.release_tag.outputs.release_tag }}'
+
+  tag_generator:
+    runs-on: ubuntu-latest
+    needs: release_creator
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          path: "test-release-tags"
+      - name: Run create release script
+        run: node ./.github/scripts/create-release.js
+
+  # notify_slack:
+  #   runs-on: ubuntu-latest
+  #   if: always()
+  #   needs: release_creator
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #     - uses: actions/setup-node@v2
+  #     - uses: technote-space/workflow-conclusion-action@v2
+  #     - name: Report status
+  #       if: always()
+  #       run: node ./.github/scripts/slack-release-notification.js
+  #       env:
+  #         FLEET_RELEASE_SLACK_WEBHOOK: ${{ secrets.FLEET_RELEASE_SLACK_WEBHOOK }}
+  #         RELEASE_TAG: ${{ needs.release_creator.outputs.release_tag }}
