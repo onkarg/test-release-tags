@@ -36,40 +36,40 @@ jobs:
       # Checks out the default github branch
       - name: Check out code
         uses: actions/checkout@v2
-        
-      - name: Create release branch
-        run: git checkout -b ${{ steps.get_branch_name.outputs.value }}
 
       - name: Initialize mandatory git config
         run: |
           git config user.name "GitHub Actions"
           git config user.email "noreply@github.com"
 
-      - name: Push new branch
+      - name: Create and Push new branch
         run: |
+          git checkout -b ${{ steps.get_branch_name.outputs.value }}
           git push origin ${{ steps.get_branch_name.outputs.value }}
 
+      # We create a PR for release branch to only go into main,
+      # once release is merged into main, we merge main into develop
       - name: Create pull request into main
         uses: thomaseizinger/create-pull-request@1.0.0
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           head: ${{ steps.get_branch_name.outputs.value }}
           base: main
           title: v${{ github.event.inputs.version_name }} into main
           reviewers: ${{ github.event.issue.user.login }}
           body: |
-            This PR was created Github Actions.
+            This PR was created by Github Actions.
 
-      - name: Create pull request to develop
-        uses: thomaseizinger/create-pull-request@1.0.0
-        with:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            head: ${{ steps.get_branch_name.outputs.value }}
-            base: develop
-            title: v${{ github.event.inputs.version_name }} into develop
-            reviewers: ${{ github.event.issue.user.login }}
-            body: |
-              This PR was created Github Actions.
+      # - name: Create pull request to develop
+      #   uses: thomaseizinger/create-pull-request@1.0.0
+      #   with:
+      #       github-token: ${{ secrets.GITHUB_TOKEN }}
+      #       head: ${{ steps.get_branch_name.outputs.value }}
+      #       base: develop
+      #       title: v${{ github.event.inputs.version_name }} into develop
+      #       reviewers: ${{ github.event.issue.user.login }}
+      #       body: |
+      #         This PR was created by Github Actions.
 
   # push_tag_and_release:
   #   runs-on: ubuntu-latest
