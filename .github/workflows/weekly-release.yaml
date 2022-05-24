@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       branch_name: ${{ steps.get_branch_name.outputs.value }}
+      pr_number: ${{ steps.pr_creator.outputs.number }}
     steps:
       - name: Set branch name for output
         id: get_branch_name
@@ -33,7 +34,7 @@ jobs:
         id: github_context_step
         run: echo '${{ steps.get_branch_name.outputs.value }}'
 
-      # Checks out the default github branch
+      #Checks out the default github branch
       - name: Check out code
         uses: actions/checkout@v2
 
@@ -50,6 +51,7 @@ jobs:
       # We create a PR for release branch to only go into main,
       # once release is merged into main, we merge main into develop
       - name: Create pull request into main
+        id: pr_creator
         uses: thomaseizinger/create-pull-request@1.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -60,37 +62,9 @@ jobs:
           body: |
             This PR was created by Github Actions.
 
-      # - name: Create pull request to develop
-      #   uses: thomaseizinger/create-pull-request@1.0.0
-      #   with:
-      #       github-token: ${{ secrets.GITHUB_TOKEN }}
-      #       head: ${{ steps.get_branch_name.outputs.value }}
-      #       base: develop
-      #       title: v${{ github.event.inputs.version_name }} into develop
-      #       reviewers: ${{ github.event.issue.user.login }}
-      #       body: |
-      #         This PR was created by Github Actions.
-
-  # push_tag_and_release:
-  #   runs-on: ubuntu-latest
-  #   needs: create_release_tag
-  #   steps:
-  #     # Check out code using git
-  #     - uses: actions/checkout@v2
-  #     # Install Node 12
-  #     - uses: actions/setup-node@v1
-  #       with:
-  #         version: 12
-  #     - run: npm install @octokit/action
-  #     # Node.js script up push new tag and draft release
-  #     - run: node ./.github/scripts/create-release.js
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #         RELEASE_TAG: ${{ needs.create_release_tag.outputs.release_tag }}
-
-  # deploy:
+  # deploy_us_canary:
   #   name: Deploy latest release to US canary
-  #   needs: [create_release_tag, push_tag_and_release]
+  #   needs: [create_release]
   #   uses: nauto/web-apps/.github/workflows/deployment.yaml@develop
   #   with:
   #     BRANCH: develop
@@ -108,17 +82,39 @@ jobs:
   #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
   #     NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  # notify_slack:
-  #   runs-on: ubuntu-latest
-  #   if: always()
-  #   needs: [create_release_tag, push_tag_and_release, deploy]
-  #   steps:
-  #     - uses: actions/checkout@v2
-  #     - uses: actions/setup-node@v2
-  #     - uses: technote-space/workflow-conclusion-action@v2
-  #     - name: Report status
-  #       if: always()
-  #       run: node ./.github/scripts/slack-release-notification.js
-  #       env:
-  #         FLEET_RELEASE_SLACK_WEBHOOK: ${{ secrets.FLEET_RELEASE_SLACK_WEBHOOK }}
-  #         RELEASE_TAG: ${{ needs.create_release_tag.outputs.release_tag }}
+  # deploy_jp_canary:
+  #   name: Deploy latest release to JP canary
+  #   needs: [create_release]
+  #   uses: nauto/web-apps/.github/workflows/deployment.yaml@develop
+  #   with:
+  #     BRANCH: develop
+  #     BUCKET: nauto-prod-jp-fleet-app-cloudfront-canary
+  #     ADMIN_API_ROOT: https://admin-api.nauto.systems/v2.2
+  #     BASE_ADMIN_API_ROOT: https://admin-api.nauto.systems
+  #     SERVICES_API_ROOT: https://api.jp.nauto.systems/v2.2
+  #     BASE_SERVICES_API_ROOT: https://api.jp.nauto.systems
+  #     DISTRIBUTION_ID: E1UPOABXF8HVNS
+  #     ENV: Canary-JP
+  #     OBJECT_NAME: 'dist'
+  #     HAS_DOMAIN: true
+  #   secrets:
+  #     AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_PROD_JP }}
+  #     AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD_JP }}
+  #     NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  trigger_jira_and_slack:
+    runs-on: ubuntu-latest
+    if: always()
+    # needs: [create_release, deploy_us_canary, deploy_jp_canary]
+    needs: [create_release]
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v2
+      - uses: technote-space/workflow-conclusion-action@v2
+      - name: Report status
+        if: always()
+        run: node ./.github/scripts/create-release.js
+        env:
+          # FLEET_RELEASE_SLACK_WEBHOOK: ${{ secrets.FLEET_RELEASE_SLACK_WEBHOOK }}
+          RELEASE_TAG: ${{ needs.create_release.outputs.branch_name }}
+          PR_NUMBER: ${{ needs.pr_creator.outputs.pr_number }}
